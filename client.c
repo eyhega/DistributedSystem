@@ -41,6 +41,7 @@ typedef enum {
 	JETON	///< The client is sending the token to another client
 } diffuse_t;
 
+
 int socket_num;							///< The socket id (fd)
 char buffer[BUFFER_SIZE];				///< The buffer to use for exchange messages via the socket
 struct couple clients[NB_CO_WORKER+1];	///< All the clients data (other clients and me)
@@ -50,6 +51,7 @@ unsigned short LN[NB_CO_WORKER+1]; 	///< The token values (updated upon the toke
 state_t status = OUTSIDE;				///< The current client status
 pthread_t SCThread;					///< The thread to perform the critical section
 pthread_mutex_t mutexV = PTHREAD_MUTEX_INITIALIZER;///< The mutex to lock V & LN ressources (between the current thread and the SCThread)
+int isLogOn = 0;						///< Boolean to know if the program has to log or not
 
 /**
  * \brief Test if two clients are equals
@@ -92,7 +94,7 @@ void saveClientsInfos(struct couple * self)
 	struct couple tmp;
 	char * offset = buffer;
 	
-	sscanf(buffer,"%s %u | ",tmp._name,&tmp._port);
+	sscanf(buffer,"%*c%s %u | ",tmp._name,&tmp._port);
 	do
 	{
 		int cmp = strcmp(tmp._name,self->_name);
@@ -105,10 +107,14 @@ void saveClientsInfos(struct couple * self)
 		offset+=2; // go on first string char
 	}while(sscanf(offset,"%s %d |",tmp._name,&tmp._port) == 2 && counter<NB_CO_WORKER);
 	
-	printf("Les clients ont ete enregistres\n");
-	for(counter = 0 ; counter < NB_CO_WORKER ; ++counter)
+	if(isLogOn)
 	{
-		printf("Name %s\nPort %d\n==========\n",clients[counter]._name,clients[counter]._port);
+		printf("Les clients ont ete enregistres\n");
+			
+		for(counter = 0 ; counter < NB_CO_WORKER ; ++counter)
+		{
+			printf("Name %s\nPort %d\n==========\n",clients[counter]._name,clients[counter]._port);
+		}
 	}
 	
 	/* Add self at the array end */
@@ -126,14 +132,17 @@ void* asyncRcv(void * arg)
 	int lg_app;
 	struct sockaddr_in appelant;
 	
-	printf("I am listening\n");
+	if(isLogOn)
+		printf("I am listening\n");
+	
 	lg_app=sizeof(struct sockaddr_in);
 	recus=recvfrom(socket_num,buffer,sizeof(buffer),0,(struct sockaddr *) &appelant,&lg_app);
 	if (recus <=0)
 		printf("bug\n");
 	else 
-	{	
-	  printf("Message : %s\n",buffer);
+	{
+		if(isLogOn)
+			printf("Message : %s\n",buffer);
 	}
 	
 	return NULL;
@@ -180,13 +189,18 @@ void sendMsgToClient(int clientIndex)
 	struct sockaddr_in target;
 	struct hostent *entree;
 	
+	printf("==> %d \n", clientIndex);
+	
 	target.sin_family=AF_INET;
 	target.sin_port=htons(clients[clientIndex]._port);
-  
+	
 	entree= (struct hostent *)gethostbyname(clients[clientIndex]._name);
+	printf("entree->h_addr = %s | entree->h_length = %d \n",entree->h_addr,entree->h_length);
 	bcopy((char *) entree->h_addr, (char *)&target.sin_addr, entree->h_length);
 	
-	printf("Sending %s to client [ %s %d ]\n",buffer,clients[clientIndex]._name,clients[clientIndex]._port);
+	if(isLogOn)
+		printf("Sending %s to client [ %s %d ]\n",buffer,clients[clientIndex]._name,clients[clientIndex]._port);
+		
 	emission = sendto(socket_num,buffer,sizeof(buffer),0,(struct sockaddr *)&target,sizeof(target));
 	if(emission <= 0)
 	{
@@ -202,7 +216,10 @@ void sendMsgToClient(int clientIndex)
 void diffuse(diffuse_t type)
 {
 	int index = 0;
-	printf("Diffusing REQ\n");
+	
+	if(isLogOn)
+		printf("Diffusing REQ\n");
+		
 	sprintf(buffer,"[ %s %d ] REQ %d %d",clients[NB_CO_WORKER]._name,clients[NB_CO_WORKER]._port,type,V[NB_CO_WORKER]);
 	for( ; index < NB_CO_WORKER ; ++index)
 	{
@@ -227,7 +244,10 @@ void sendToken(int clientIndex)
 		strcat(buffer,tmpBuffer);
 	}
 	jeton = NON_PRESENT;
-	printf("Sending token : %s",buffer);
+	
+	if(isLogOn)
+		printf("Sending token : %s",buffer);
+		
 	sendMsgToClient(clientIndex);
 }
 
@@ -420,7 +440,9 @@ int processDataFromSocket()
 	ssize_t size = 0;
 	diffuse_t req_type;
 	size = read(socket_num,buffer,BUFFER_SIZE);
-	printf("Received message : %s\n",buffer);
+	
+	if(isLogOn)
+		printf("Received message : %s\n",buffer);
 	
 	extractCoupleFromBuffer(buffer,&sender);
 	while(*offset != ']') ++offset; // positionning cursor
@@ -498,40 +520,64 @@ void launchSystem(couple * self)
 		   perror("select()");
 		else if (retval)
 		{
-		   printf("Data is available now.\n");
-		   quit = processData(&fds);
+			if(isLogOn)
+				printf("Data is available now.\n");
+				
+			quit = processData(&fds);
 		}
 		else
 		{
-		   printf("No data within five seconds.\n");
-		   int count = 0;
-		   printf("\n");
-		   for(; count < NB_CO_WORKER + 1 ; ++count)
-		   {
-			   printf("[ %s %d ] %d\n",clients[count]._name,clients[count]._port,V[count]);
-		   }
-		   printf("\n");
-		   if(jeton == PRESENT)
-		   {
-				for(count = 0; count < NB_CO_WORKER + 1 ; ++count)
+			if(isLogOn)
+			{
+				printf("No data within five seconds.\n\n");
+
+				int count = 0;
+
+				for(; count < NB_CO_WORKER + 1 ; ++count)
 				{
-				   printf("Token [ %s %d ] %d\n",clients[count]._name,clients[count]._port,LN[count]);
-				}   
-		   }
-		   printf("\n");
+				   printf("[ %s %d ] %d\n",clients[count]._name,clients[count]._port,V[count]);
+				}
+				printf("\n");
+				if(jeton == PRESENT)
+				{
+					for(count = 0; count < NB_CO_WORKER + 1 ; ++count)
+					{
+					   printf("Token [ %s %d ] %d\n",clients[count]._name,clients[count]._port,LN[count]);
+					}   
+				}
+				printf("\n");
+			}
 		}
 	}
 	
 	close(socket_num);
 }
 
+void handleCommand(int nbParameter,char ** argv)
+{
+	if(nbParameter > 1)
+	{
+		int index =1;
+		while(index < nbParameter)
+		{
+			if(strcmp(argv[index],"-log") == 0)
+			{
+				isLogOn = 1;
+			}
+			++index;
+		}
+	}
+}
 
-int main()
+
+int main(int argc, char ** argv)
 {
 	char x;
 	struct couple don;
 	int m,nbTry = 0;
 	pthread_t * thread = NULL;
+	
+	handleCommand(argc,argv);
 	
 	printf("Please, fill the gap:\n");
 	gethostname(don._name,BUFF_SIZE);
