@@ -1,3 +1,7 @@
+/**
+ * \file client.c
+ * \author Antoine DUFAURE & Gaetan EYHERAMONO
+ * */
 #include "entete.h"
 
 #include <stdio.h>
@@ -189,13 +193,10 @@ void sendMsgToClient(int clientIndex)
 	struct sockaddr_in target;
 	struct hostent *entree;
 	
-	printf("==> %d \n", clientIndex);
-	
 	target.sin_family=AF_INET;
 	target.sin_port=htons(clients[clientIndex]._port);
 	
 	entree= (struct hostent *)gethostbyname(clients[clientIndex]._name);
-	printf("entree->h_addr = %s | entree->h_length = %d \n",entree->h_addr,entree->h_length);
 	bcopy((char *) entree->h_addr, (char *)&target.sin_addr, entree->h_length);
 	
 	if(isLogOn)
@@ -502,6 +503,7 @@ void launchSystem(couple * self)
 	/* initialize V & LN */
 	memset(V,0,(NB_CO_WORKER+1)*sizeof(unsigned short));
 	memset(LN,0,(NB_CO_WORKER+1)*sizeof(unsigned short));
+	printf("System is launched.\n");
 	
 	while(!quit)
 	{

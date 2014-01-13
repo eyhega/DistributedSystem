@@ -1,3 +1,7 @@
+/**
+ * \file serveur.c
+ * \author Antoine DUFAURE & Gaetan EYHERAMONO
+ * */
 #include <stdio.h>
 #include <string.h>
 #include <netinet/in.h>

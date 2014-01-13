@@ -1,3 +1,7 @@
+/**
+ * \file entete.h
+ * \author Antoine DUFAURE & Gaetan EYHERAMONO
+ * */
 #include <rpc/types.h>
 #include <rpc/xdr.h>
 #include <string.h>
